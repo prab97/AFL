@@ -1,0 +1,79 @@
+--- orgjs.c	2025-11-11 16:13:14.621740700 +0000
++++ js.c	2025-11-11 16:07:47.326987900 +0000
+@@ -27,22 +27,30 @@
+ 
+     if (*src == '\0') { current.type = TOKEN_EOF; return; }
+ 
+-    if (isdigit(*src)) {
+-        int i = 0;
+-        while (isdigit(*src) || *src == '.') current.text[i++] = *src++;
+-        current.text[i] = '\0';
+-        current.type = TOKEN_NUMBER;
+-        return;
+-    }
++  if (isdigit(*src)) {
++    int i = 0;
++    while (isdigit(*src) || *src == '.') {
++        if (i < (int)sizeof(current.text) - 1) current.text[i++] = *src;
++        src++;
++    }
++    current.text[i] = '\0';
++    current.type = TOKEN_NUMBER;
++    return;
++}
++
++
++ if (isalpha(*src)) {
++    int i = 0;
++    while (isalnum(*src)) {
++        if (i < (int)sizeof(current.text) - 1) current.text[i++] = *src;
++        src++;
++    }
++    current.text[i] = '\0';
++    if (strcmp(current.text, "let") == 0) current.type = TOKEN_LET;
++    else current.type = TOKEN_ID;
++    return;
++}
+ 
+-    if (isalpha(*src)) {
+-        int i = 0;
+-        while (isalnum(*src)) current.text[i++] = *src++;
+-        current.text[i] = '\0';
+-        if (strcmp(current.text, "let") == 0) current.type = TOKEN_LET;
+-        else current.type = TOKEN_ID;
+-        return;
+-    }
+ 
+     switch (*src) {
+         case '+': current.type = TOKEN_PLUS; src++; return;
+@@ -151,16 +159,27 @@
+         next_token();
+         double val = parse_expr();
+         if (current.type == TOKEN_SEMI) next_token();
+-        vars[var_count++] = (Var){ .value = val };
+-        strcpy(vars[var_count - 1].name, name);
++
++        /* Prevent overflow of vars[]: check capacity before inserting. */
++        if (var_count < (int)(sizeof(vars) / sizeof(vars[0]))) {
++            vars[var_count].value = val;
++            /* ensure name fits into vars[].name (both are 64 bytes) */
++            strncpy(vars[var_count].name, name, sizeof(vars[var_count].name) - 1);
++            vars[var_count].name[sizeof(vars[var_count].name) - 1] = '\0';
++            var_count++;
++        } else {
++            fprintf(stderr, "Too many variables (overflow attempt)\n");
++            exit(1);
++        }
+     } else {
+         double val = parse_expr();
+         if (current.type == TOKEN_SEMI) next_token();
+-        // If not console.log, show result
++        /* If not console.log, show result */
+         printf("Result: %g\n", val);
+     }
+ }
+ 
++
+ void interpret(const char *code) {
+     src = code;
+     next_token();
